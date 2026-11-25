@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escape Room 3D — Simulación y Modelado</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="hud3d.css">
+</head>
+<body>
+
+  <!-- ══════════════════════ INTRO ══════════════════════ -->
+  <div id="intro">
+    <div class="intro-box">
+      <h1 class="intro-title">Escape Room 3D</h1>
+      <div class="intro-sub">Simulación y Modelado de Sistemas</div>
+      <div class="intro-desc">
+        Estás atrapado en un búnker. El gas tóxico se acumula.<br>
+        Resuelve los acertijos, esquiva al asesino y escapa del laberinto.
+      </div>
+      <div class="intro-paradigms">
+        <div class="para-tag">I · Eventos Discretos</div>
+        <div class="para-tag">II · FSM</div>
+        <div class="para-tag">III · Sistema Dinámico</div>
+        <div class="para-tag">IV · Cadena de Markov</div>
+        <div class="para-tag">V · HMM</div>
+        <div class="para-tag">VI · Teoría de Juegos</div>
+      </div>
+      <div class="controls-grid">
+        <span class="k">W A S D</span><span>moverse</span>
+        <span class="k">Ratón</span><span>mirar</span>
+        <span class="k">Shift</span><span>correr</span>
+        <span class="k">E</span><span>interactuar / recoger</span>
+        <span class="k">1 – 7</span><span>usar objeto del inventario</span>
+        <span class="k">F</span><span>linterna</span>
+        <span class="k">M</span><span>mapa</span>
+        <span class="k">G</span><span>calidad gráfica (baja / media / alta)</span>
+        <span class="k">V</span><span>voz del Vigilante sí / no</span>
+        <span class="k">Esc</span><span>pausa / cerrar panel</span>
+      </div>
+      <button class="btn-primary" id="btn-start" onclick="startGame()">INICIAR</button>
+      <div class="intro-note">Usa auriculares (audio 3D) · el tiempo corre mientras resuelves un acertijo</div>
+      <div class="intro-status" id="intro-status">Comprobando IA…</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ JUEGO ══════════════════════ -->
+  <div id="game" class="hidden">
+    <div id="viewport"></div>
+
+    <!-- Capas de efectos -->
+    <div id="flash-cone"></div>
+    <div id="gas-vignette"></div>
+    <div id="damage-flash"></div>
+    <div id="whiteout"></div>
+
+    <!-- HUD superior: tiempo + gas + puzzles -->
+    <header id="hud">
+      <div class="hud-block">
+        <div class="hud-label">TIEMPO</div>
+        <div class="hud-timer" id="timer">08:00</div>
+      </div>
+
+      <div class="hud-block hud-gas">
+        <div class="hud-label">GAS TÓXICO &nbsp;<span id="gas-ppm">0.0 ppm</span> <span id="mask-icon" class="hidden" title="Máscara equipada">😷</span></div>
+        <div class="gas-track">
+          <div class="gas-fill" id="gas-fill"></div>
+        </div>
+        <div class="gas-limits">
+          <span>0</span><span id="gas-limit">300 ppm</span>
+        </div>
+      </div>
+
+      <div class="hud-block hud-puzzles">
+        <div class="hud-label">PUZZLES</div>
+        <div class="dots" id="dots">
+          <div class="dot" id="d0" title="Panel de diales"></div>
+          <div class="dot" id="d1" title="Caja fuerte"></div>
+          <div class="dot" id="d2" title="Secuencia"></div>
+          <div class="dot" id="d3" title="Tablero de fechas"></div>
+          <div class="dot bonus" id="d4" title="Bonus">★</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Columna derecha: minimapa + paradigmas -->
+    <div id="side-right">
+      <div class="map-wrap">
+        <canvas id="minimap" width="200" height="200"></canvas>
+        <div class="map-room" id="hud-room">ENTRADA</div>
+      </div>
+
+      <div id="paradigm-panel" class="paradigm-panel">
+        <div class="para-block">
+          <div class="para-block-title">IV · MARKOV</div>
+          <div class="para-block-body">
+            <span id="markov-state-val" class="mk-state mk-seguro">SEGURO</span>
+            <span id="markov-matrix-val" class="mk-matrix closed">P_CERRADA</span>
+          </div>
+        </div>
+        <div class="para-block">
+          <div class="para-block-title">V · HMM</div>
+          <div class="para-block-body">
+            <span id="gas-state-label" class="hmm-state">SEGURO</span>
+          </div>
+        </div>
+        <div class="para-block">
+          <div class="para-block-title">VII · MONTE CARLO EN VIVO</div>
+          <div class="para-block-body">
+            <span class="mc-live-label">P(escape)</span>
+            <span id="mc-live" class="mc-live mid">—</span>
+            <span id="mc-aggr" class="mc-aggr">asesino ×1.00</span>
+          </div>
+        </div>
+        <div class="para-block npc-para-block" id="npc-box">
+          <div class="npc-header">
+            <span class="para-block-title">VI · NPC M-7</span>
+            <span id="npc-badge" class="npc-badge badge-coop">COOPERAR</span>
+          </div>
+          <div id="npc-msg" class="npc-msg">Analizando entorno...</div>
+          <div class="npc-hint">Búscalo en la sala y pulsa [E]</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tarjeta de sala (aparece al entrar) -->
+    <div id="room-card">
+      <div class="room-name" id="room-name">ENTRADA</div>
+      <div class="room-desc" id="room-desc"></div>
+      <div class="room-tip"  id="room-tip"></div>
+    </div>
+
+    <!-- Centro: mira + prompt -->
+    <div id="crosshair"></div>
+    <div id="prompt" class="hidden"></div>
+    <div id="toast" class="toast"></div>
+    <div id="director-line"><span class="director-tag">📢 VIGILANTE</span><span class="director-text"></span></div>
+
+    <!-- Inventario (barra inferior) -->
+    <div id="inventory">
+      <div class="inv-items" id="inv-items"><span class="inv-empty">inventario vacío</span></div>
+    </div>
+
+    <!-- Registro -->
+    <aside id="log-panel">
+      <div class="log-title">REGISTRO</div>
+      <div id="log-lines"></div>
+    </aside>
+
+    <div id="controls-hint">E interactuar · 1-7 usar · F linterna · M mapa · G calidad · V voz · Esc pausa</div>
+
+    <!-- ═════ Paneles (puzzle / NPC) ═════ -->
+    <div id="overlay" class="hidden">
+      <div class="overlay-box">
+
+        <!-- Puzzle -->
+        <div class="step hidden" id="step-puzzle">
+          <div class="step-label" id="puzzle-title">Acertijo</div>
+          <div class="puzzle-desc" id="puzzle-desc"></div>
+          <input class="puzzle-input" id="puzzle-input" autocomplete="off"
+                 placeholder="Escribe tu respuesta aquí..."
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();submitPuzzle();}" />
+          <div class="puzzle-btns" id="puzzle-actions">
+            <button class="btn-primary" onclick="submitPuzzle()">Confirmar</button>
+            <button class="btn-hint"    onclick="requestHint()">💡 Pedir pista</button>
+            <button class="btn-back"    onclick="goStep('step-menu')">← Volver (Esc)</button>
+          </div>
+          <button class="btn-primary hidden" id="puzzle-continue" onclick="goStep('step-menu')">Continuar ▸</button>
+          <div class="puzzle-feedback hidden" id="puzzle-feedback"></div>
+          <div class="hint-cost-note">⚠ Las pistas tienen coste de tiempo (-5 a -15s) · el reloj sigue corriendo</div>
+        </div>
+
+        <!-- NPC (Paradigma VI — Teoría de Juegos) -->
+        <div class="step hidden" id="step-npc">
+          <div class="step-label">⚡ Negocia con M-7</div>
+          <div class="npc-chat">
+            <div class="npc-chat-log" id="npc-chat-log"></div>
+            <div class="npc-chat-row">
+              <input class="puzzle-input" id="npc-chat-input" autocomplete="off" maxlength="160"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();npcSend();}" />
+              <button class="btn-hint" id="npc-chat-send" onclick="npcSend()">Hablar</button>
+            </div>
+            <div class="npc-chat-note" id="npc-chat-note"></div>
+          </div>
+          <div class="npc-payoff-table">
+            <div class="npc-payoff-title">Matriz de pagos (segundos)</div>
+            <table class="payoff-matrix">
+              <thead>
+                <tr><th></th><th>NPC coopera</th><th>NPC compite</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Tú cooperas</td><td class="pay-pos">+20s</td><td class="pay-neg">−10s</td></tr>
+                <tr><td>Tú compites</td><td class="pay-pos">+15s</td><td class="pay-neu">+5s</td></tr>
+              </tbody>
+            </table>
+            <div class="npc-optimal-note">
+              M-7 parte de la estrategia mixta del 75%. El gas, tus últimas jugadas y lo que le digas (±25%) inclinan su decisión.
+            </div>
+          </div>
+          <div class="choice-list">
+            <button class="choice-btn coop-choice" onclick="playerChooseCooperation('COOPERAR')">
+              <span>🤝 COOPERAR</span>
+              <span class="choice-sub">+20s si el NPC coopera · −10s si el NPC compite</span>
+            </button>
+            <button class="choice-btn comp-choice" onclick="playerChooseCooperation('COMPETIR')">
+              <span>⚔ COMPETIR</span>
+              <span class="choice-sub">+15s si el NPC coopera · +5s si el NPC compite</span>
+            </button>
+          </div>
+          <button class="btn-back" onclick="goStep('step-menu')">← Volver (Esc)</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Pausa -->
+    <div id="pause" class="hidden">
+      <div class="pause-box">
+        <div class="pause-title">PAUSA</div>
+        <div class="pause-sub">Haz clic para continuar</div>
+        <div class="pause-note">El reloj y el gas están detenidos</div>
+      </div>
+    </div>
+
+    <!-- Mapa grande -->
+    <div id="bigmap" class="hidden">
+      <canvas id="bigmap-canvas"></canvas>
+      <div class="bigmap-note">MAPA · vista cenital · [M] para cerrar</div>
+    </div>
+  </div><!-- fin #game -->
+
+  <!-- ══════════════════════ FIN ══════════════════════ -->
+  <div id="endscreen" class="hidden">
+    <div class="end-box">
+      <div class="end-title" id="end-title"></div>
+      <div class="end-paradigms-title">▸ Resumen de paradigmas</div>
+      <pre class="end-stats" id="end-stats"></pre>
+      <div class="end-events-title">▸ Registro de eventos (Paradigma I)</div>
+      <div class="end-events" id="end-events"></div>
+      <button class="btn-primary" onclick="location.reload()">Jugar de nuevo</button>
+    </div>
+  </div>
+
+  <!-- Motor 3D (local, funciona sin Internet) -->
+  <script src="lib/three.min.js"></script>
+  <!-- Postprocesado y carga de modelos (Three.js r128, locales) -->
+  <script src="lib/CopyShader.js"></script>
+  <script src="lib/LuminosityHighPassShader.js"></script>
+  <script src="lib/FXAAShader.js"></script>
+  <script src="lib/EffectComposer.js"></script>
+  <script src="lib/RenderPass.js"></script>
+  <script src="lib/ShaderPass.js"></script>
+  <script src="lib/UnrealBloomPass.js"></script>
+  <script src="lib/GLTFLoader.js"></script>
+  <script src="assets/models/models-data.js"></script>
+
+  <!-- JS modular — orden de carga obligatorio -->
+  <script src="data.js"></script>
+  <script src="puzzlegen.js"></script>
+  <script src="gas.js"></script>
+  <script src="events.js"></script>
+  <script src="fsm.js"></script>
+  <script src="npc-ai.js"></script>
+  <script src="ai-client.js"></script>
+  <script src="world_map.js"></script>
+  <script src="hunter.js"></script>
+  <script src="sfx.js"></script>
+  <script src="gfx.js"></script>
+  <script src="world3d.js"></script>
+  <script src="UI.js"></script>
+  <script src="montecarlo.js"></script>
+  <script src="director.js"></script>
+  <script src="game.js"></script>
+  <script>
+    // Estado de la IA y de los gráficos en la pantalla de inicio
+    AI.ready.then(status => {
+      const el = document.getElementById('intro-status');
+      const http = location.protocol.startsWith('http');
+      el.textContent = (AI.available ? '🟢 IA conectada (' + status.model + ')' : '⚪ IA sin conexión: lógica local')
+        + ' · ' + (http ? 'gráficos completos' : 'gráficos básicos — abre el juego con JUGAR.bat para texturas y modelos reales');
+    });
+  </script>
+</body>
+</html>

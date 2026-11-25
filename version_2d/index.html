@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Escape Room — Simulación y Modelado</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ══════════════════════ INTRO ══════════════════════ -->
+  <div id="intro">
+    <div class="intro-box">
+      <div class="intro-title">⬡ ESCAPE ROOM ⬡</div>
+      <div class="intro-sub">Simulación y Modelado de Sistemas</div>
+      <div class="intro-desc">
+        Estás atrapado. El gas tóxico se acumula.<br>
+        Resuelve los acertijos y escapa a tiempo.
+      </div>
+      <div class="intro-paradigms">
+        <div class="para-tag">I · Eventos Discretos</div>
+        <div class="para-tag">II · FSM</div>
+        <div class="para-tag">III · Sistema Dinámico</div>
+        <div class="para-tag">IV · Cadena de Markov</div>
+        <div class="para-tag">V · HMM</div>
+        <div class="para-tag">VI · Teoría de Juegos</div>
+      </div>
+      <button class="btn-primary" onclick="startGame()">INICIAR</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ JUEGO ══════════════════════ -->
+  <div id="game" class="hidden">
+
+    <!-- HEADER: timer + gas + puzzles -->
+    <header id="hud">
+      <div class="hud-block">
+        <div class="hud-label">TIEMPO</div>
+        <div class="hud-timer" id="timer">08:00</div>
+      </div>
+
+      <div class="hud-block hud-gas">
+        <div class="hud-label">GAS TÓXICO &nbsp;<span id="gas-ppm">0.0 ppm</span></div>
+        <div class="gas-track">
+          <div class="gas-fill" id="gas-fill"></div>
+        </div>
+        <div class="gas-limits">
+          <span>0</span><span id="gas-limit">300 ppm</span>
+        </div>
+      </div>
+
+      <div class="hud-block hud-puzzles">
+        <div class="hud-label">PUZZLES</div>
+        <div class="dots" id="dots">
+          <div class="dot" id="d0" title="Panel de diales"></div>
+          <div class="dot" id="d1" title="Caja fuerte"></div>
+          <div class="dot" id="d2" title="Secuencia"></div>
+          <div class="dot" id="d3" title="Tablero de fechas"></div>
+          <div class="dot bonus" id="d4" title="Bonus">★</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main id="main">
+
+      <!-- Tarjeta de sala -->
+      <div id="room-card">
+        <div class="room-name" id="room-name">ENTRADA</div>
+        <div class="room-desc" id="room-desc"></div>
+        <div class="room-tip"  id="room-tip"></div>
+      </div>
+
+      <!-- Panel de paradigmas activos -->
+      <div id="paradigm-panel" class="paradigm-panel">
+
+        <!-- Markov (Paradigma IV) -->
+        <div class="para-block">
+          <div class="para-block-title">IV · MARKOV</div>
+          <div class="para-block-body">
+            <span class="mk-label">Estado:</span>
+            <span id="markov-state-val" class="mk-state mk-seguro">SEGURO</span>
+            <span class="mk-sep">|</span>
+            <span id="markov-matrix-val" class="mk-matrix closed">P_CERRADA</span>
+          </div>
+        </div>
+
+        <!-- HMM (Paradigma V) -->
+        <div class="para-block">
+          <div class="para-block-title">V · HMM</div>
+          <div class="para-block-body">
+            <span id="gas-state-label" class="hmm-state">SEGURO</span>
+          </div>
+        </div>
+
+        <!-- NPC (Paradigma VI) -->
+        <div class="para-block npc-para-block" id="npc-box">
+          <div class="npc-header">
+            <span class="para-block-title">VI · NPC</span>
+            <span id="npc-badge" class="npc-badge badge-coop">COOPERAR</span>
+          </div>
+          <div id="npc-msg" class="npc-msg">Analizando entorno...</div>
+          <button class="btn-npc-interact" onclick="goStep('step-npc')">⚡ Interactuar</button>
+        </div>
+
+      </div>
+
+      <!-- Paso actual (un bloque visible a la vez) -->
+      <div id="step-area">
+
+        <!-- PASO 0: Menú de acciones -->
+        <div class="step" id="step-menu">
+          <div class="step-label">¿Qué quieres hacer?</div>
+          <div class="actions">
+            <button class="act-btn" onclick="goStep('step-move')">
+              <span class="act-icon">🚶</span>
+              <span class="act-text">
+                <strong>Ir a otra sala</strong>
+                <small>Moverse por el escape room</small>
+              </span>
+            </button>
+            <button class="act-btn" onclick="goStep('step-pick')">
+              <span class="act-icon">📦</span>
+              <span class="act-text">
+                <strong>Recoger objeto</strong>
+                <small>Tomar algo de esta sala</small>
+              </span>
+            </button>
+            <button class="act-btn" onclick="goStep('step-use')">
+              <span class="act-icon">🔧</span>
+              <span class="act-text">
+                <strong>Usar objeto</strong>
+                <small>Aplicar algo de tu inventario</small>
+              </span>
+            </button>
+            <button class="act-btn" onclick="goStep_puzzle()">
+              <span class="act-icon">🧩</span>
+              <span class="act-text">
+                <strong>Resolver acertijo</strong>
+                <small>Descifrar el reto de esta sala</small>
+              </span>
+            </button>
+            <button class="act-btn" id="btn-door" onclick="tryDoor()">
+              <span class="act-icon">🚪</span>
+              <span class="act-text">
+                <strong>Abrir salida</strong>
+                <small>Intentar escapar</small>
+              </span>
+            </button>
+            <button class="act-btn" id="btn-vent" onclick="doVent()" style="display:none">
+              <span class="act-icon">💨</span>
+              <span class="act-text">
+                <strong>Abrir ventana</strong>
+                <small>Reduce el gas tóxico</small>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- PASO: Mover -->
+        <div class="step hidden" id="step-move">
+          <div class="step-label">¿A dónde vas?</div>
+          <div id="move-list" class="choice-list"></div>
+          <button class="btn-back" onclick="goStep('step-menu')">← Volver</button>
+        </div>
+
+        <!-- PASO: Recoger -->
+        <div class="step hidden" id="step-pick">
+          <div class="step-label">¿Qué recoges?</div>
+          <div id="pick-list" class="choice-list"></div>
+          <button class="btn-back" onclick="goStep('step-menu')">← Volver</button>
+        </div>
+
+        <!-- PASO: Usar -->
+        <div class="step hidden" id="step-use">
+          <div class="step-label">¿Qué usas?</div>
+          <div id="use-list" class="choice-list"></div>
+          <button class="btn-back" onclick="goStep('step-menu')">← Volver</button>
+        </div>
+
+        <!-- PASO: Puzzle -->
+        <div class="step hidden" id="step-puzzle">
+          <div class="step-label" id="puzzle-title">Acertijo</div>
+          <div class="puzzle-desc" id="puzzle-desc"></div>
+          <input class="puzzle-input" id="puzzle-input"
+                 placeholder="Escribe tu respuesta aquí..."
+                 onkeydown="if(event.key==='Enter') submitPuzzle()" />
+          <div class="puzzle-btns">
+            <button class="btn-primary" onclick="submitPuzzle()">Confirmar</button>
+            <button class="btn-hint"    onclick="requestHint()">💡 Pedir pista</button>
+            <button class="btn-back"    onclick="goStep('step-menu')">← Volver</button>
+          </div>
+          <div class="puzzle-feedback hidden" id="puzzle-feedback"></div>
+          <div class="hint-cost-note">⚠ Las pistas tienen coste de tiempo (-5 a -15s)</div>
+        </div>
+
+        <!-- PASO: Interacción NPC (Paradigma VI — Teoría de Juegos) -->
+        <div class="step hidden" id="step-npc">
+          <div class="step-label">⚡ Interacción con el NPC</div>
+          <div class="npc-payoff-table">
+            <div class="npc-payoff-title">Matriz de pagos (segundos)</div>
+            <table class="payoff-matrix">
+              <thead>
+                <tr><th></th><th>NPC coopera</th><th>NPC compite</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Tú cooperas</td><td class="pay-pos">+20s</td><td class="pay-neg">−10s</td></tr>
+                <tr><td>Tú compites</td><td class="pay-pos">+15s</td><td class="pay-neu">+5s</td></tr>
+              </tbody>
+            </table>
+            <div class="npc-optimal-note">
+              Estrategia óptima: cooperar 75% del tiempo (p = 0.75 · V = 12.5)
+            </div>
+          </div>
+          <div class="choice-list">
+            <button class="choice-btn coop-choice" onclick="playerChooseCooperation('COOPERAR')">
+              <span>🤝 COOPERAR</span>
+              <span class="choice-sub">+20s si el NPC coopera · −10s si el NPC compite</span>
+            </button>
+            <button class="choice-btn comp-choice" onclick="playerChooseCooperation('COMPETIR')">
+              <span>⚔ COMPETIR</span>
+              <span class="choice-sub">+15s si el NPC coopera · +5s si el NPC compite</span>
+            </button>
+          </div>
+          <button class="btn-back" onclick="goStep('step-menu')">← Volver</button>
+        </div>
+
+      </div><!-- fin step-area -->
+
+      <!-- Inventario siempre visible abajo -->
+      <div id="inventory">
+        <div class="inv-label">🎒 Inventario</div>
+        <div class="inv-items" id="inv-items">
+          <span class="inv-empty">vacío</span>
+        </div>
+      </div>
+
+      <div id="item-tip" class="item-tip hidden"></div>
+
+    </main>
+
+    <!-- LOG lateral -->
+    <aside id="log-panel">
+      <div class="log-title">REGISTRO</div>
+      <div id="log-lines"></div>
+    </aside>
+
+  </div><!-- fin #game -->
+
+  <!-- ══════════════════════ FIN ══════════════════════ -->
+  <div id="endscreen" class="hidden">
+    <div class="end-box">
+      <div class="end-title" id="end-title"></div>
+      <div class="end-paradigms-title">▸ Resumen de paradigmas</div>
+      <pre class="end-stats" id="end-stats"></pre>
+      <div class="end-events-title">▸ Registro de eventos (Paradigma I)</div>
+      <div class="end-events" id="end-events"></div>
+      <button class="btn-primary" onclick="location.reload()">Jugar de nuevo</button>
+    </div>
+  </div>
+
+  <!-- JS modular — orden de carga obligatorio -->
+  <script src="data.js"></script>
+  <script src="gas.js"></script>
+  <script src="events.js"></script>
+  <script src="fsm.js"></script>
+  <script src="UI.js"></script>
+  <script src="montecarlo.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

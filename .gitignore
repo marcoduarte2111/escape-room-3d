@@ -1,0 +1,6 @@
+node_modules/
+.vs/
+.env
+visor_3d/
+version_3d_v1/
+publicar/
